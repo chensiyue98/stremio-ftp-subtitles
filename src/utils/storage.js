@@ -1,6 +1,6 @@
 // storage.js - File-based persistence with whole-file AEAD encryption
 // Security model: Entire config file is encrypted with AES-256-GCM
-// Individual fields (ftpUser, ftpPass) are stored as plain text within the encrypted file
+// Individual fields (e.g. Google Drive tokens) are stored as plain text within the encrypted file
 // This provides strong security while avoiding dual encryption complexity
 const fs = require('fs');
 const path = require('path');
@@ -44,7 +44,7 @@ function encrypt(text) {
     const iv = crypto.randomBytes(IV_LENGTH);
     const key = getKey();
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    cipher.setAAD(Buffer.from('stremio-ftp-addon', 'utf8')); // Additional authenticated data
+    cipher.setAAD(Buffer.from('stremio-drive-addon', 'utf8')); // Additional authenticated data
     
     let encrypted = cipher.update(text, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -93,7 +93,7 @@ function decrypt(encryptedData) {
       const key = getKey();
       
       const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-      decipher.setAAD(Buffer.from('stremio-ftp-addon', 'utf8'));
+      decipher.setAAD(Buffer.from('stremio-drive-addon', 'utf8'));
       decipher.setAuthTag(authTag);
       
       let decrypted = decipher.update(encrypted, 'hex', 'utf8');
@@ -147,7 +147,7 @@ function migrateLegacyField(encryptedData, fieldName) {
         const key = getKey();
         
         const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-        decipher.setAAD(Buffer.from('stremio-ftp-addon', 'utf8'));
+        decipher.setAAD(Buffer.from('stremio-drive-addon', 'utf8'));
         decipher.setAuthTag(authTag);
         
         let decrypted = decipher.update(encrypted, 'hex', 'utf8');
@@ -253,9 +253,7 @@ class FileStorage {
         for (const [key, config] of parsed) {
           // Migrate legacy encrypted fields to plain text (only during loading for backward compatibility)
           const migratedConfig = {
-            ...config,
-            ftpPass: config.ftpPass ? migrateLegacyField(config.ftpPass, 'ftpPass') : config.ftpPass,
-            ftpUser: config.ftpUser ? migrateLegacyField(config.ftpUser, 'ftpUser') : config.ftpUser,
+            ...config
           };
           configs.set(key, migratedConfig);
         }

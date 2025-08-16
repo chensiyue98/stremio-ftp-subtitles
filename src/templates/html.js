@@ -8,7 +8,7 @@ const { PUBLIC_URL } = require('../config');
  */
 function page(html) {
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FTP Subtitles 配置</title>
+<title>Google Drive Subtitles 配置</title>
 <style>
 body{font:16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px;max-width:780px}
 input,button{font:inherit} .row{margin:8px 0} label{display:block;margin-bottom:4px}
@@ -33,45 +33,40 @@ ${html}`;
  * @returns {string} - HTML form
  */
 function configureForm(prefill = {}, action = '/configure') {
+  const keyMatch = action.match(/\/u\/([a-f0-9]{16})\/configure/i);
+  const key = keyMatch ? keyMatch[1] : null;
   return page(`
-  <h1>FTP Subtitles · 配置 
+  <h1>Google Drive Subtitles · 配置
     <span class="tooltip">🔒
       <span class="tooltiptext">
         <strong>数据安全保护</strong><br>
-        • FTP 凭据使用 AES-256-GCM 加密存储<br>
+        • Google Drive 凭据使用 AES-256-GCM 加密存储<br>
         • 每个用户的配置完全独立隔离<br>
-        • 服务器不会记录或传输您的密码<br>
-        • 所有敏感数据都经过加密持久化存储<br>
-        • 支持 FTPS 安全连接协议
+        • 服务器不会记录或传输您的敏感信息
       </span>
     </span>
   </h1>
   <form method="POST" action="${action}">
-    <div class="row"><label>FTP Host</label><input name="ftpHost" type="text" required value="${prefill.ftpHost ?? ''}"></div>
-    <div class="row"><label>FTP User</label><input name="ftpUser" type="text" required value="${prefill.ftpUser ?? ''}"></div>
-    <div class="row"><label>FTP Password</label><input name="ftpPass" type="password" value="${prefill.ftpPass ?? ''}"></div>
-    <div class="row"><label><input type="checkbox" name="ftpSecure" ${prefill.ftpSecure ? 'checked' : ''}> 使用 FTPS（安全连接）</label></div>
-    <div class="row"><label>字幕根目录（如 /subtitles）</label><input name="ftpBase" type="text" required value="${prefill.ftpBase ?? '/subtitles'}"></div>
+    <div class="row"><label>Google Drive Folder ID</label><input name="gdriveFolderId" type="text" value="${prefill.gdriveFolderId ?? ''}"></div>
+    ${key ? `<div class="row"><a class=\"button\" style=\"background:#4285f4\" href=\"/u/${key}/connect-drive?folderId=${prefill.gdriveFolderId ?? ''}\">${prefill.gdriveTokens ? '重新连接 Google Drive' : 'Connect to Google Drive'}</a></div>` : ''}
     <div class="row">
       <button type="submit">保存</button>
-      <button type="button" id="testBtn" style="margin-left:8px;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 16px;">测试连接</button>
     </div>
   </form>
-  <div id="testBox" class="card small">点击"测试连接"验证 FTP 参数（3 秒超时）。</div>
-  
+
   <div class="card" style="background:#f0fdf4;border:1px solid #22c55e;">
     <div style="color:#166534;font-weight:bold;margin-bottom:8px;">🔒 数据安全保护</div>
     <div class="small" style="color:#166534;">
-      您的 FTP 凭据和配置信息都经过 <strong>AES-256-GCM 军用级加密</strong> 存储，确保最高级别的数据安全。
-      每个用户的配置完全独立，服务器不会记录或传输您的密码信息。
+      您的配置和 Google Drive 凭据都经过 <strong>AES-256-GCM 加密</strong> 存储，确保最高级别的数据安全。
+      每个用户的配置完全独立，服务器不会记录或传输您的敏感信息。
     </div>
   </div>
-  
+
   <div class="card small">
     保存后你可以在 Stremio 中使用：<br>
     <code>${PUBLIC_URL}/u/&lt;key&gt;/manifest.json</code>
   </div>
-  
+
   <div class="card" style="background:#fff3cd;border:1px solid #ffd700;text-align:center;">
     <div style="margin-bottom:8px;">☕ 喜欢这个项目？</div>
     <a href="https://buymeacoffee.com/chensiyue98" target="_blank" rel="noopener" style="display:inline-block;background:#ffdd00;color:#000;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:bold;box-shadow:0 2px 8px rgba(255,221,0,0.3);">
@@ -79,45 +74,6 @@ function configureForm(prefill = {}, action = '/configure') {
     </a>
     <div class="small" style="margin-top:8px;color:#856404;">您的支持是我持续开发的动力！</div>
   </div>
-
-  <script>
-  (function(){
-    const form = document.querySelector('form');
-    const btn = document.getElementById('testBtn');
-    const box = document.getElementById('testBox');
-
-    function endpointFromAction(action) {
-      return action && action.startsWith('/u/') ? action.replace('/configure','/test-ftp') : '/test-ftp';
-    }
-
-    btn.addEventListener('click', async () => {
-      const payload = {
-        ftpHost: form.ftpHost.value.trim(),
-        ftpUser: form.ftpUser.value.trim(),
-        ftpPass: form.ftpPass.value,
-        ftpSecure: form.ftpSecure.checked,
-        ftpBase: form.ftpBase.value.trim() || '/'
-      };
-      if (!payload.ftpHost) { box.textContent = '请输入 FTP Host'; return; }
-
-      const ep = endpointFromAction(form.getAttribute('action') || '/configure');
-      box.textContent = '测试中…';
-      try {
-        const r = await fetch(ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        const j = await r.json();
-        if (j.ok) {
-          const names = (j.sample || []).map(x => x.dir ? (x.name + '/') : x.name).join(', ');
-          box.innerHTML = '✅ 连接成功（' + j.elapsedMs + ' ms）。目录 <code>' + (j.base || '/') +
-            '</code> 共 ' + j.count + ' 项；示例：' + (names || '—');
-        } else {
-          box.innerHTML = '❌ 连接失败：' + (j.error || 'unknown') + '（' + (j.elapsedMs ?? '-') + ' ms）';
-        }
-      } catch (e) {
-        box.textContent = '❌ 请求失败：' + e;
-      }
-    });
-  })();
-  </script>
   `);
 }
 

@@ -4,7 +4,7 @@ const config = require('../config');
 const { buildMatchSignals, scoreByFilename, detectLangFromFilename, extnameLower } = require('../utils/helpers');
 const { getConfig } = require('../utils/storage');
 const { getCinemeta } = require('./cinemeta');
-const { createFtpFileLister } = require('./ftp');
+const { createDriveFileLister } = require('./googleDrive');
 
 /**
  * Create addon runtime for a specific key
@@ -26,7 +26,7 @@ function createAddonRuntimeForKey(key) {
     behaviorHints: { configurable: true, configurationRequired: false },
   };
 
-  const listFtpSubtitleFiles = createFtpFileLister(key, cfg);
+  const listDriveSubtitleFiles = createDriveFileLister(key, cfg);
 
   async function getSubtitles(type, id /*, extras */) {
     const work = (async () => {
@@ -36,7 +36,7 @@ function createAddonRuntimeForKey(key) {
       } catch (_) {}
       
       const sig = buildMatchSignals(type, id, meta);
-      const files = await listFtpSubtitleFiles();
+      const files = await listDriveSubtitleFiles();
 
       // Score and fallback
       const scored = files.map((f) => ({ 
@@ -54,18 +54,19 @@ function createAddonRuntimeForKey(key) {
       }
 
       const subtitles = picked.map((f) => {
-        const idHash = crypto.createHash('md5').update(f.path).digest('hex');
+        const idHash = crypto
+          .createHash('md5')
+          .update('gd:' + f.path)
+          .digest('hex');
         const ext = extnameLower(f.name);
-        const urlToFile = `${config.PUBLIC_URL}/u/${key}/file?path=${encodeURIComponent(
-          f.path
-        )}&ext=${encodeURIComponent(ext)}&name=${encodeURIComponent(f.name)}`;
-        
+        const urlToFile = `${config.PUBLIC_URL}/u/${key}/file?driveId=${encodeURIComponent(f.path)}&ext=${encodeURIComponent(ext)}&name=${encodeURIComponent(f.name)}`;
+
         return {
           id: idHash,
           url: urlToFile,
           lang: detectLangFromFilename(f.name),
-          title: `FTP · ${f.name}`,
-          name: `FTP · ${f.name}`,
+          title: `GDrive · ${f.name}`,
+          name: `GDrive · ${f.name}`,
         };
       });
 
