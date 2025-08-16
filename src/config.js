@@ -17,4 +17,8 @@ module.exports = {
   ADDON_ID_PREFIX: 'org.example.ftp-subs',
   ADDON_NAME: 'FTP Subtitles',
   ADDON_DESCRIPTION: '从你配置的 FTP 目录自动匹配字幕',
+
+  // Google Drive OAuth
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
 };
