@@ -32,9 +32,9 @@ ${html}`;
  * @param {string} action - Form action URL
  * @returns {string} - HTML form
  */
-function configureForm(prefill = {}, action = '/configure') {
+function configureForm(prefill = {}, action = '/configure', key = '') {
   return page(`
-  <h1>FTP Subtitles · 配置 
+  <h1>FTP Subtitles · 配置
     <span class="tooltip">🔒
       <span class="tooltiptext">
         <strong>数据安全保护</strong><br>
@@ -52,6 +52,8 @@ function configureForm(prefill = {}, action = '/configure') {
     <div class="row"><label>FTP Password</label><input name="ftpPass" type="password" value="${prefill.ftpPass ?? ''}"></div>
     <div class="row"><label><input type="checkbox" name="ftpSecure" ${prefill.ftpSecure ? 'checked' : ''}> 使用 FTPS（安全连接）</label></div>
     <div class="row"><label>字幕根目录（如 /subtitles）</label><input name="ftpBase" type="text" required value="${prefill.ftpBase ?? '/subtitles'}"></div>
+    <div class="row"><label>Google Drive Folder ID</label><input name="driveFolderId" type="text" value="${prefill.driveFolderId ?? ''}"></div>
+    ${key ? `<div class="row"><a class="button" href="/u/${key}/drive/connect">Connect to Google Drive</a></div>` : ''}
     <div class="row">
       <button type="submit">保存</button>
       <button type="button" id="testBtn" style="margin-left:8px;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 16px;">测试连接</button>
