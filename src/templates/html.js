@@ -47,6 +47,14 @@ function configureForm(prefill = {}, action = '/configure') {
     保存后你可以在 Stremio 中使用：<br>
     <code>${PUBLIC_URL}/u/&lt;key&gt;/manifest.json</code>
   </div>
+  
+  <div class="card" style="background:#fff3cd;border:1px solid #ffd700;text-align:center;">
+    <div style="margin-bottom:8px;">☕ 喜欢这个项目？</div>
+    <a href="https://buymeacoffee.com/chensiyue98" target="_blank" rel="noopener" style="display:inline-block;background:#ffdd00;color:#000;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:bold;box-shadow:0 2px 8px rgba(255,221,0,0.3);">
+      💖 Buy me a coffee
+    </a>
+    <div class="small" style="margin-top:8px;color:#856404;">您的支持是我持续开发的动力！</div>
+  </div>
 
   <script>
   (function(){
@@ -108,6 +116,15 @@ function configuredOkPage(key) {
     </div>
     <p class="small"><a href="/u/${key}/configure">编辑此配置</a></p>
   </div>
+  
+  <div class="card" style="background:#f0f9ff;border:1px solid #0ea5e9;text-align:center;">
+    <div style="margin-bottom:8px;">🎉 配置成功！喜欢这个项目吗？</div>
+    <a href="https://buymeacoffee.com/chensiyue98" target="_blank" rel="noopener" style="display:inline-block;background:#ffdd00;color:#000;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:bold;box-shadow:0 2px 8px rgba(255,221,0,0.3);">
+      ☕ Buy me a coffee
+    </a>
+    <div class="small" style="margin-top:8px;color:#0369a1;">感谢您的支持，让开源项目更好！</div>
+  </div>
+  
   <p><a href="/configure">返回新建其它配置</a></p>
   `);
 }

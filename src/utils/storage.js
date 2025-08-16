@@ -1,79 +1,327 @@
-// utils/storage.js
+// storage.js - File-based persistence for Render with encryption
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
-// In-memory storage (for demo purposes; production should use DB/Redis)
-const CONFIGS = new Map();    // key -> { ftpHost, ftpUser, ftpPass, ftpSecure, ftpBase }
-const RUNTIMES = new Map();   // key -> { manifest, getSubtitles, cfg }
-const LIST_CACHE = new Map(); // key -> { ts, files } directory list cache
+const DATA_DIR = path.join(__dirname, '../../data');
 
-/**
- * Get configuration for a key
- * @param {string} key - Configuration key
- * @returns {object|undefined} - Configuration object
- */
-function getConfig(key) {
-  return CONFIGS.get(key);
+// Encryption settings
+const ALGORITHM = 'aes-256-gcm';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+const IV_LENGTH = 12; // GCM recommended IV length
+const TAG_LENGTH = 16; // GCM auth tag length
+
+// Get consistent key
+function getKey() {
+  const keyStr = ENCRYPTION_KEY.slice(0, 64); // Take first 64 chars
+  const key = Buffer.from(keyStr.padEnd(64, '0'), 'hex').slice(0, 32); // Ensure exactly 32 bytes
+  
+  // Validate key length
+  if (key.length !== 32) {
+    throw new Error('Invalid encryption key: must be exactly 32 bytes');
+  }
+  
+  return key;
 }
 
-/**
- * Set configuration for a key
- * @param {string} key - Configuration key
- * @param {object} config - Configuration object
- */
-function setConfig(key, config) {
-  CONFIGS.set(key, config);
+// Encrypt function
+function encrypt(text) {
+  try {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const key = getKey();
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+    cipher.setAAD(Buffer.from('stremio-ftp-addon', 'utf8')); // Additional authenticated data
+    
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag();
+    
+    return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+  } catch (e) {
+    console.error('Encryption failed:', e.message);
+    throw new Error(`Encryption failed: ${e.message}. Data cannot be stored without encryption.`);
+  }
 }
 
-/**
- * Get runtime for a key
- * @param {string} key - Runtime key
- * @returns {object|undefined} - Runtime object
- */
-function getRuntime(key) {
-  return RUNTIMES.get(key);
+// Decrypt function
+function decrypt(encryptedData) {
+  try {
+    if (!encryptedData.includes(':')) {
+      // Assume it's plain text from old version
+      return encryptedData;
+    }
+    
+    const parts = encryptedData.split(':');
+    
+        // Handle legacy CBC format (2 parts: iv:encrypted)
+    if (parts.length === 2) {
+      try {
+        const [ivHex, encrypted] = parts;
+        const iv = Buffer.from(ivHex, 'hex');
+        const key = getKey();
+        
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+      } catch (e) {
+        console.log('Legacy CBC decryption failed, assuming plain text');
+        return encryptedData;
+      }
+    }
+    
+    // Handle new GCM format (3 parts: iv:authTag:encrypted)
+    if (parts.length === 3) {
+      const [ivHex, authTagHex, encrypted] = parts;
+      const iv = Buffer.from(ivHex, 'hex');
+      const authTag = Buffer.from(authTagHex, 'hex');
+      const key = getKey();
+      
+      const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+      decipher.setAAD(Buffer.from('stremio-ftp-addon', 'utf8'));
+      decipher.setAuthTag(authTag);
+      
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    }
+    
+    // Unknown format, assume plain text
+    return encryptedData;
+  } catch (e) {
+    console.error('Decryption failed:', e.message);
+    return encryptedData; // Return as-is if decryption fails
+  }
 }
 
-/**
- * Set runtime for a key
- * @param {string} key - Runtime key
- * @param {object} runtime - Runtime object
- */
-function setRuntime(key, runtime) {
-  RUNTIMES.set(key, runtime);
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-/**
- * Check if runtime exists for a key
- * @param {string} key - Runtime key
- * @returns {boolean} - Whether runtime exists
- */
-function hasRuntime(key) {
-  return RUNTIMES.has(key);
+class FileStorage {
+  constructor() {
+    this.configPath = path.join(DATA_DIR, 'configs.json');
+    this.cachePath = path.join(DATA_DIR, 'cache.json');
+    
+    // Validate encryption system on startup
+    this.validateEncryption();
+    
+    this.configs = this.loadConfigs();
+    this.cache = this.loadCache();
+    this.runtimes = new Map(); // In-memory runtime storage (not persisted)
+    
+    // Auto-save periodically
+    setInterval(() => this.cleanup(), 60000); // Clean cache every minute
+  }
+
+  // Validate encryption system
+  validateEncryption() {
+    try {
+      const testData = 'encryption-test-' + Date.now();
+      const encrypted = encrypt(testData);
+      const decrypted = decrypt(encrypted);
+      
+      if (decrypted !== testData) {
+        throw new Error('Encryption validation failed: decrypted data does not match original');
+      }
+      
+      console.log('✅ Encryption system validated successfully');
+    } catch (e) {
+      console.error('❌ Encryption system validation failed:', e.message);
+      throw new Error(`Critical security error: Encryption system is not working properly. ${e.message}`);
+    }
+  }
+
+  loadConfigs() {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const data = fs.readFileSync(this.configPath, 'utf8');
+        const decryptedData = decrypt(data);
+        const parsed = JSON.parse(decryptedData);
+        // Convert array back to Map and decrypt sensitive fields
+        const configs = new Map();
+        for (const [key, config] of parsed) {
+          // Decrypt sensitive fields
+          const decryptedConfig = {
+            ...config,
+            ftpPass: config.ftpPass ? decrypt(config.ftpPass) : config.ftpPass,
+            ftpUser: config.ftpUser ? decrypt(config.ftpUser) : config.ftpUser,
+          };
+          configs.set(key, decryptedConfig);
+        }
+        return configs;
+      }
+    } catch (e) {
+      console.error('Failed to load configs:', e.message);
+    }
+    return new Map();
+  }
+
+  saveConfigs() {
+    try {
+      // Encrypt sensitive fields before saving
+      const configsToSave = [];
+      for (const [key, config] of this.configs) {
+        const encryptedConfig = {
+          ...config,
+          ftpPass: config.ftpPass ? encrypt(config.ftpPass) : config.ftpPass,
+          ftpUser: config.ftpUser ? encrypt(config.ftpUser) : config.ftpUser,
+        };
+        configsToSave.push([key, encryptedConfig]);
+      }
+      const data = JSON.stringify(configsToSave);
+      const encryptedData = encrypt(data);
+      fs.writeFileSync(this.configPath, encryptedData, 'utf8');
+    } catch (e) {
+      console.error('Failed to save configs:', e.message);
+      throw new Error(`Critical error: Unable to save encrypted configuration. ${e.message}`);
+    }
+  }
+
+  loadCache() {
+    try {
+      if (fs.existsSync(this.cachePath)) {
+        const data = fs.readFileSync(this.cachePath, 'utf8');
+        const cacheData = JSON.parse(data);
+        // Convert back to Map and filter expired entries
+        const now = Date.now();
+        const cache = new Map();
+        for (const [key, value] of cacheData) {
+          if (value.ts && now - value.ts < 60 * 1000) { // 60 second TTL
+            cache.set(key, value);
+          }
+        }
+        return cache;
+      }
+    } catch (e) {
+      console.error('Failed to load cache:', e.message);
+    }
+    return new Map();
+  }
+
+  saveCache() {
+    try {
+      const data = JSON.stringify([...this.cache]);
+      fs.writeFileSync(this.cachePath, data, 'utf8');
+    } catch (e) {
+      console.error('Failed to save cache:', e.message);
+    }
+  }
+
+  // Config methods
+  setConfig(key, config) {
+    // First try to save with encryption, only update memory if successful
+    const originalConfig = this.configs.get(key);
+    this.configs.set(key, config);
+    
+    try {
+      this.saveConfigs();
+    } catch (e) {
+      // Restore original config if save failed
+      if (originalConfig) {
+        this.configs.set(key, originalConfig);
+      } else {
+        this.configs.delete(key);
+      }
+      throw e; // Re-throw the encryption/save error
+    }
+  }
+
+  getConfig(key) {
+    return this.configs.get(key);
+  }
+
+  hasConfig(key) {
+    return this.configs.has(key);
+  }
+
+  // Runtime methods (in-memory only)
+  setRuntime(key, runtime) {
+    this.runtimes.set(key, runtime);
+  }
+
+  getRuntime(key) {
+    return this.runtimes.get(key);
+  }
+
+  hasRuntime(key) {
+    return this.runtimes.has(key);
+  }
+
+  // Cache methods (compatible with utils/storage.js interface)
+  setCachedFileList(key, data) {
+    this.setCache(key, data);
+  }
+
+  getCachedFileList(key) {
+    return this.getCache(key);
+  }
+
+  // Cache methods
+  setCache(key, value) {
+    this.cache.set(key, { ...value, ts: Date.now() });
+    // Periodically save cache (don't save on every write for performance)
+    if (Math.random() < 0.1) { // 10% chance to save
+      this.saveCache();
+    }
+  }
+
+  getCache(key) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.ts < 60 * 1000) {
+      return cached;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  // Migration method to handle existing plain text data
+  migrateOldData() {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const data = fs.readFileSync(this.configPath, 'utf8');
+        
+        // Try to parse as plain JSON (old format)
+        try {
+          const parsed = JSON.parse(data);
+          if (Array.isArray(parsed)) {
+            console.log('Migrating old plain text config data...');
+            const migratedConfigs = new Map();
+            for (const [key, config] of parsed) {
+              migratedConfigs.set(key, config);
+            }
+            this.configs = migratedConfigs;
+            this.saveConfigs(); // This will encrypt the data
+            console.log('Migration completed successfully');
+            return true;
+          }
+        } catch (e) {
+          // Not plain JSON, assume it's already encrypted
+        }
+      }
+    } catch (e) {
+      console.error('Migration failed:', e.message);
+    }
+    return false;
+  }
+
+  // Cleanup method - call periodically
+  cleanup() {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, value] of this.cache) {
+      if (!value.ts || now - value.ts > 60 * 1000) {
+        this.cache.delete(key);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      this.saveCache();
+      console.log(`Cleaned ${cleaned} expired cache entries`);
+    }
+  }
 }
 
-/**
- * Get cached file list for a key
- * @param {string} key - Cache key
- * @returns {object|undefined} - Cached data
- */
-function getCachedFileList(key) {
-  return LIST_CACHE.get(key);
-}
-
-/**
- * Set cached file list for a key
- * @param {string} key - Cache key
- * @param {object} data - Cache data
- */
-function setCachedFileList(key, data) {
-  LIST_CACHE.set(key, data);
-}
-
-module.exports = {
-  getConfig,
-  setConfig,
-  getRuntime,
-  setRuntime,
-  hasRuntime,
-  getCachedFileList,
-  setCachedFileList,
-};
+module.exports = new FileStorage();

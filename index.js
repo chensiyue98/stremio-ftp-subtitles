@@ -5,15 +5,17 @@ const url = require('url');
 const crypto = require('crypto');
 const querystring = require('querystring');
 const FTP = require('basic-ftp');
+const storage = require('./src/utils/storage');
 
 // ====== 环境配置 ======
 const PORT = Number(process.env.PORT) || 7777;
-const PUBLIC_URL = process.env.PUBLIC_URL || `http://127.0.0.1:${PORT}`;
+const PUBLIC_URL = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
 
-// ====== 内存存储（演示：生产可换 DB/Redis）======
-const CONFIGS = new Map();    // key -> { ftpHost, ftpUser, ftpPass, ftpSecure, ftpBase }
+// ====== 运行时存储（重启后重建）======
 const RUNTIMES = new Map();   // key -> { manifest, getSubtitles, cfg }
-const LIST_CACHE = new Map(); // key -> { ts, files } 目录列表缓存
+
+// Cleanup cache every 5 minutes
+setInterval(() => storage.cleanup(), 5 * 60 * 1000);
 
 // ====== 常量与工具 ======
 const SUB_EXTS = ['.srt', '.vtt', '.ass', '.ssa', '.sub'];
@@ -129,7 +131,7 @@ async function testFtpConnection({ ftpHost, ftpUser, ftpPass, ftpSecure, ftpBase
 
 // ====== 为某个 key 构建运行时（manifest + handler）======
 function createAddonRuntimeForKey(key) {
-  const cfg = CONFIGS.get(key);
+  const cfg = storage.getConfig(key);
   if (!cfg) throw new Error('Config missing');
 
   const manifest = {
@@ -146,9 +148,8 @@ function createAddonRuntimeForKey(key) {
 
   async function listFtpSubtitleFiles() {
     // 缓存命中
-    const cached = LIST_CACHE.get(key);
-    const now = Date.now();
-    if (cached && now - cached.ts < CACHE_TTL_MS) return cached.files;
+    const cached = storage.getCache(key);
+    if (cached && cached.files) return cached.files;
 
     const client = new FTP.Client();
     client.ftp.verbose = false;
@@ -190,7 +191,7 @@ function createAddonRuntimeForKey(key) {
       try { client.close(); } catch (_) {}
     }
 
-    LIST_CACHE.set(key, { ts: now, files: results });
+    storage.setCache(key, { files: results });
     return results;
   }
 
@@ -212,12 +213,14 @@ function createAddonRuntimeForKey(key) {
         const urlToFile = `${PUBLIC_URL}/u/${key}/file?path=${encodeURIComponent(
           f.path
         )}&ext=${encodeURIComponent(ext)}&name=${encodeURIComponent(f.name)}`;
+        const lang = detectLangFromFilename(f.name);
+        const subtitleName = `${f.name} [${lang.toUpperCase()}]`;
         return {
           id: idHash,
           url: urlToFile,
-          lang: detectLangFromFilename(f.name),
-          title: `FTP · ${f.name}`, // 某些客户端读取 title
-          name:  `FTP · ${f.name}`,
+          lang: lang,
+          title: subtitleName,
+          name: subtitleName,
         };
       });
 
@@ -261,6 +264,9 @@ ${html}`;
 function configureForm(prefill = {}, action = '/configure') {
   return page(`
   <h1>FTP Subtitles · 配置</h1>
+  <div class="card small">
+    <strong>🔒 安全提示：</strong> 您的 FTP 凭据使用 AES-256-GCM 加密存储，提供最高级别的数据安全保护。
+  </div>
   <form method="POST" action="${action}">
     <div class="row"><label>FTP Host</label><input name="ftpHost" type="text" required value="${prefill.ftpHost ?? ''}"></div>
     <div class="row"><label>FTP User</label><input name="ftpUser" type="text" required value="${prefill.ftpUser ?? ''}"></div>
@@ -366,7 +372,7 @@ const server = http.createServer(async (req, res) => {
           ftpSecure: !!data.ftpSecure,
           ftpBase: String(data.ftpBase || '/subtitles').trim() || '/subtitles',
         };
-        CONFIGS.set(key, cfg);
+        storage.setConfig(key, cfg);
         if (!RUNTIMES.has(key)) RUNTIMES.set(key, createAddonRuntimeForKey(key));
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.end(configuredOkPage(key));
@@ -401,7 +407,7 @@ const server = http.createServer(async (req, res) => {
 
       // 用户专属：配置页（GET/POST）
       if (u.pathname === `/u/${key}/configure` && req.method === 'GET') {
-        const prefill = CONFIGS.get(key) || {};
+        const prefill = storage.getConfig(key) || {};
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.end(configureForm(prefill, `/u/${key}/configure`));
         return;
@@ -418,7 +424,7 @@ const server = http.createServer(async (req, res) => {
             ftpSecure: !!data.ftpSecure,
             ftpBase: String(data.ftpBase || '/subtitles').trim() || '/subtitles',
           };
-          CONFIGS.set(key, cfg);
+          storage.setConfig(key, cfg);
           // 重新构建该 key 的运行时（使新配置立即生效）
           RUNTIMES.set(key, createAddonRuntimeForKey(key));
 
@@ -435,7 +441,7 @@ const server = http.createServer(async (req, res) => {
         req.on('end', async () => {
           let data = {};
           try { data = JSON.parse(body || '{}'); } catch (_) {}
-          const cfg = CONFIGS.get(key) || {};
+          const cfg = storage.getConfig(key) || {};
           const payload = {
             ftpHost: data.ftpHost ?? cfg.ftpHost,
             ftpUser: data.ftpUser ?? cfg.ftpUser,

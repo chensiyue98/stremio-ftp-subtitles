@@ -37,7 +37,7 @@ stremio-ftp-subtitles/
 
 ### Utilities
 - **src/utils/helpers.js**: Pure utility functions (slugify, language detection, scoring, etc.)
-- **src/utils/storage.js**: In-memory storage operations (configs, runtimes, cache)
+- **src/utils/storage.js**: Encrypted file-based storage operations (configs, runtimes, cache) with AES-256-GCM
 
 ### Services
 - **src/services/addon.js**: Creates addon runtimes with manifest and subtitle handlers

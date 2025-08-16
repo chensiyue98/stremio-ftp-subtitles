@@ -1,5 +1,7 @@
 // routes/ftp-test.js
 const { testFtpConnection } = require('../services/ftp');
+// routes/ftp-test.js
+const { generateUrl } = require('../templates/html');
 const { getConfig } = require('../utils/storage');
 
 /**

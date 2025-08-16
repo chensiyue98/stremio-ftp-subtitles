@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: stremio-ftp-subtitles
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ENCRYPTION_KEY
+        generateValue: true
+    healthCheckPath: /manifest.json
+    disk:
+      name: addon-data
+      mountPath: /app/data
+      sizeGB: 1
