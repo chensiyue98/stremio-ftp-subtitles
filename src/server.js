@@ -10,12 +10,13 @@ const {
   handleUserConfigurePost 
 } = require('./routes/configure');
 const { handleTestFtp, handleUserTestFtp } = require('./routes/ftp-test');
-const { 
-  handleRootManifest, 
-  handleUserManifest, 
-  handleUserSubtitles, 
-  handleUserFileProxy 
+const {
+  handleRootManifest,
+  handleUserManifest,
+  handleUserSubtitles,
+  handleUserFileProxy
 } = require('./routes/addon');
+const { handleConnectDrive, handleConnectCallback } = require('./routes/gdrive');
 
 /**
  * Create and configure the HTTP server
@@ -63,6 +64,14 @@ function createServer() {
         // User-specific: test FTP connection
         if (u.pathname === `/u/${key}/test-ftp` && req.method === 'POST') {
           return handleUserTestFtp(key, req, res);
+        }
+
+        if (u.pathname === `/u/${key}/connect-drive` && req.method === 'GET') {
+          return handleConnectDrive(key, req, res, u.query);
+        }
+
+        if (u.pathname === `/u/${key}/google-callback` && req.method === 'GET') {
+          return handleConnectCallback(key, req, res, u.query);
         }
 
         // a) FTP file proxy

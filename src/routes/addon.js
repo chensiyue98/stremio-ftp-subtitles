@@ -5,6 +5,7 @@ const config = require('../config');
 const { getRuntime, setRuntime } = require('../utils/storage');
 const { createAddonRuntimeForKey } = require('../services/addon');
 const { createFtpFileDownloader } = require('../services/ftp');
+const { createDriveFileDownloader } = require('../services/googleDrive');
 
 /**
  * Handle GET /manifest.json (root manifest)
@@ -88,11 +89,12 @@ async function handleUserSubtitles(key, parsedUrl, req, res) {
 async function handleUserFileProxy(key, parsedUrl, req, res) {
   const rt = getRuntime(key) || setRuntime(key, createAddonRuntimeForKey(key)).get?.(key) || getRuntime(key);
   
+  const driveId = parsedUrl.query.driveId;
   const filePath = parsedUrl.query.path;
   const ext = String(parsedUrl.query.ext || '').toLowerCase();
   const name = String(parsedUrl.query.name || 'subtitle').replace(/[/\\]/g, '');
 
-  if (!filePath || String(filePath).includes('..')) {
+  if (!driveId && (!filePath || String(filePath).includes('..'))) {
     res.statusCode = 400;
     res.end('Bad path');
     return;
@@ -118,16 +120,21 @@ async function handleUserFileProxy(key, parsedUrl, req, res) {
     return;
   }
 
-  const downloadFile = createFtpFileDownloader(rt.cfg);
   try {
-    await downloadFile(filePath, res);
+    if (driveId) {
+      const downloadDrive = createDriveFileDownloader(rt.cfg);
+      await downloadDrive(driveId, res);
+    } else {
+      const downloadFile = createFtpFileDownloader(rt.cfg);
+      await downloadFile(filePath, res);
+    }
   } catch (e) {
-    console.error('FTP proxy error:', e.message || e);
+    console.error('File proxy error:', e.message || e);
     if (!res.headersSent) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     }
     res.statusCode = 502;
-    res.end('FTP proxy error');
+    res.end('File proxy error');
   }
 }
 

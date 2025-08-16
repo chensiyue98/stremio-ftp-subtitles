@@ -2,13 +2,14 @@
   "name": "stremio-ftp-subtitles",
   "version": "1.3.3",
   "type": "commonjs",
-  "main": "index.js",
+  "main": "main.js",
   "dependencies": {
-    "basic-ftp": "^5.0.4"
+    "basic-ftp": "^5.0.4",
+    "googleapis": "^105.0.0"
   },
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "node main.js",
+    "dev": "nodemon main.js",
     "test": "node -e \"console.log('No tests defined')\"",
     "test-encryption": "node test-encryption.js"
   },

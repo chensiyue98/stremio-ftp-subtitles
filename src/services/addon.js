@@ -5,6 +5,7 @@ const { buildMatchSignals, scoreByFilename, detectLangFromFilename, extnameLower
 const { getConfig } = require('../utils/storage');
 const { getCinemeta } = require('./cinemeta');
 const { createFtpFileLister } = require('./ftp');
+const { createDriveFileLister } = require('./googleDrive');
 
 /**
  * Create addon runtime for a specific key
@@ -27,6 +28,7 @@ function createAddonRuntimeForKey(key) {
   };
 
   const listFtpSubtitleFiles = createFtpFileLister(key, cfg);
+  const listDriveSubtitleFiles = createDriveFileLister(key, cfg);
 
   async function getSubtitles(type, id /*, extras */) {
     const work = (async () => {
@@ -36,7 +38,10 @@ function createAddonRuntimeForKey(key) {
       } catch (_) {}
       
       const sig = buildMatchSignals(type, id, meta);
-      const files = await listFtpSubtitleFiles();
+      const files = [
+        ...(await listFtpSubtitleFiles()),
+        ...(await listDriveSubtitleFiles()),
+      ];
 
       // Score and fallback
       const scored = files.map((f) => ({ 
@@ -54,18 +59,22 @@ function createAddonRuntimeForKey(key) {
       }
 
       const subtitles = picked.map((f) => {
-        const idHash = crypto.createHash('md5').update(f.path).digest('hex');
+        const idHash = crypto
+          .createHash('md5')
+          .update((f.drive ? 'gd:' : '') + f.path)
+          .digest('hex');
         const ext = extnameLower(f.name);
-        const urlToFile = `${config.PUBLIC_URL}/u/${key}/file?path=${encodeURIComponent(
-          f.path
-        )}&ext=${encodeURIComponent(ext)}&name=${encodeURIComponent(f.name)}`;
-        
+        const urlToFile = f.drive
+          ? `${config.PUBLIC_URL}/u/${key}/file?driveId=${encodeURIComponent(f.path)}&ext=${encodeURIComponent(ext)}&name=${encodeURIComponent(f.name)}`
+          : `${config.PUBLIC_URL}/u/${key}/file?path=${encodeURIComponent(f.path)}&ext=${encodeURIComponent(ext)}&name=${encodeURIComponent(f.name)}`;
+
+        const prefix = f.drive ? 'GDrive' : 'FTP';
         return {
           id: idHash,
           url: urlToFile,
           lang: detectLangFromFilename(f.name),
-          title: `FTP · ${f.name}`,
-          name: `FTP · ${f.name}`,
+          title: `${prefix} · ${f.name}`,
+          name: `${prefix} · ${f.name}`,
         };
       });
 
