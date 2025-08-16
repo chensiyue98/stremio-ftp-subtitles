@@ -6,15 +6,26 @@ This project has been refactored into a modular structure for better maintainabi
 
 ```
 stremio-ftp-subtitles/
-├── main.js                 # New entry point
-├── index.js                # Legacy monolithic file (kept for reference)
-├── package.json            # Updated to use main.js
+├── index.js                # Main entry point
+├── main.js                 # Alternative entry point
+├── package.json            # Node.js package configuration
+├── .env.example            # Environment variables template
+├── .gitignore              # Git ignore rules
+├── Dockerfile              # Docker container configuration
+├── docker-compose.yml      # Docker Compose setup
+├── render.yaml             # Render.com deployment configuration
+├── ENCRYPTION_SETUP.md     # Encryption setup guide
+├── README.md               # Main project documentation
+├── data/
+│   ├── .gitkeep            # Keeps data directory in git
+│   ├── cache.json          # Runtime cache data
+│   └── configs.json        # User configurations
 ├── src/
 │   ├── config.js           # Configuration constants
 │   ├── server.js           # HTTP server setup
 │   ├── utils/
 │   │   ├── helpers.js      # Utility functions
-│   │   └── storage.js      # In-memory storage management
+│   │   └── storage.js      # Encrypted storage management
 │   ├── services/
 │   │   ├── addon.js        # Addon runtime creation
 │   │   ├── cinemeta.js     # Cinemeta API integration
@@ -31,7 +42,8 @@ stremio-ftp-subtitles/
 ## Module Descriptions
 
 ### Core Files
-- **main.js**: New entry point that starts the server with graceful shutdown handling
+- **index.js**: Main entry point for the application
+- **main.js**: Alternative entry point (kept for reference)
 - **src/config.js**: Centralized configuration with all constants and environment variables
 - **src/server.js**: HTTP server creation and request routing logic
 
@@ -52,17 +64,29 @@ stremio-ftp-subtitles/
 ### Templates
 - **src/templates/html.js**: HTML page generation (configuration forms, success pages)
 
+### Configuration & Deployment
+- **.env.example**: Template for environment variables configuration
+- **Dockerfile**: Container configuration for Docker deployment
+- **docker-compose.yml**: Multi-container Docker application setup
+- **render.yaml**: Deployment configuration for Render.com platform
+- **ENCRYPTION_SETUP.md**: Detailed guide for setting up encryption features
+
+### Data Directory
+- **data/.gitkeep**: Ensures the data directory is tracked in Git
+- **data/cache.json**: Runtime cache for improved performance
+- **data/configs.json**: Encrypted storage for user configurations
+
 ## Usage
 
 ```bash
-# Start with new modular structure
+# Start the application
 npm start
 
-# For development
+# For development (with auto-restart)
 npm run dev
 
-# Run legacy monolithic version
-npm run legacy
+# Test encryption functionality
+npm run test-encryption
 ```
 
 ## Benefits of This Structure
@@ -77,7 +101,10 @@ npm run legacy
 
 ## Migration Notes
 
-- The original `index.js` is preserved for reference and can be run with `npm run legacy`
-- All functionality remains the same; only the code organization has changed
+- The project has been refactored into a modular structure while maintaining `index.js` as the main entry point
+- `main.js` serves as an alternative entry point with additional features
+- All functionality remains the same; only the code organization has been improved
 - The new structure follows Node.js best practices for project organization
 - Environment variables and configuration remain unchanged
+- Added comprehensive Docker support with `Dockerfile` and `docker-compose.yml`
+- Included deployment configuration for Render.com via `render.yaml`

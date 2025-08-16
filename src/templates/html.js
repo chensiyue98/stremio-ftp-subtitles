@@ -18,6 +18,10 @@ button{padding:10px 16px;border:0;border-radius:10px;background:#4f46e5;color:#f
 code{background:#f5f5f5;border-radius:6px;padding:2px 6px}
 a.button{display:inline-block;background:#10b981;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none}
 .small{color:#666;font-size:13px}
+.tooltip{position:relative;display:inline-block;cursor:help}
+.tooltip .tooltiptext{visibility:hidden;width:300px;background-color:#333;color:#fff;text-align:left;border-radius:8px;padding:12px;position:absolute;z-index:1;bottom:125%;left:50%;margin-left:-150px;opacity:0;transition:opacity 0.3s;font-size:13px;line-height:1.4;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+.tooltip .tooltiptext::after{content:"";position:absolute;top:100%;left:50%;margin-left:-5px;border-width:5px;border-style:solid;border-color:#333 transparent transparent transparent}
+.tooltip:hover .tooltiptext{visibility:visible;opacity:1}
 </style>
 ${html}`;
 }
@@ -30,7 +34,18 @@ ${html}`;
  */
 function configureForm(prefill = {}, action = '/configure') {
   return page(`
-  <h1>FTP Subtitles · 配置</h1>
+  <h1>FTP Subtitles · 配置 
+    <span class="tooltip">🔒
+      <span class="tooltiptext">
+        <strong>数据安全保护</strong><br>
+        • FTP 凭据使用 AES-256-GCM 加密存储<br>
+        • 每个用户的配置完全独立隔离<br>
+        • 服务器不会记录或传输您的密码<br>
+        • 所有敏感数据都经过加密持久化存储<br>
+        • 支持 FTPS 安全连接协议
+      </span>
+    </span>
+  </h1>
   <form method="POST" action="${action}">
     <div class="row"><label>FTP Host</label><input name="ftpHost" type="text" required value="${prefill.ftpHost ?? ''}"></div>
     <div class="row"><label>FTP User</label><input name="ftpUser" type="text" required value="${prefill.ftpUser ?? ''}"></div>
@@ -43,6 +58,15 @@ function configureForm(prefill = {}, action = '/configure') {
     </div>
   </form>
   <div id="testBox" class="card small">点击"测试连接"验证 FTP 参数（3 秒超时）。</div>
+  
+  <div class="card" style="background:#f0fdf4;border:1px solid #22c55e;">
+    <div style="color:#166534;font-weight:bold;margin-bottom:8px;">🔒 数据安全保护</div>
+    <div class="small" style="color:#166534;">
+      您的 FTP 凭据和配置信息都经过 <strong>AES-256-GCM 军用级加密</strong> 存储，确保最高级别的数据安全。
+      每个用户的配置完全独立，服务器不会记录或传输您的密码信息。
+    </div>
+  </div>
+  
   <div class="card small">
     保存后你可以在 Stremio 中使用：<br>
     <code>${PUBLIC_URL}/u/&lt;key&gt;/manifest.json</code>

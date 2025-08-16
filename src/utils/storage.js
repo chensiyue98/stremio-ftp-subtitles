@@ -1,4 +1,7 @@
-// storage.js - File-based persistence for Render with encryption
+// storage.js - File-based persistence with whole-file AEAD encryption
+// Security model: Entire config file is encrypted with AES-256-GCM
+// Individual fields (ftpUser, ftpPass) are stored as plain text within the encrypted file
+// This provides strong security while avoiding dual encryption complexity
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -7,18 +10,29 @@ const DATA_DIR = path.join(__dirname, '../../data');
 
 // Encryption settings
 const ALGORITHM = 'aes-256-gcm';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
 const IV_LENGTH = 12; // GCM recommended IV length
 const TAG_LENGTH = 16; // GCM auth tag length
 
-// Get consistent key
+// Get consistent key from base64 encoded environment variable
 function getKey() {
-  const keyStr = ENCRYPTION_KEY.slice(0, 64); // Take first 64 chars
-  const key = Buffer.from(keyStr.padEnd(64, '0'), 'hex').slice(0, 32); // Ensure exactly 32 bytes
+  const encryptionKey = process.env.ENCRYPTION_KEY;
   
-  // Validate key length
+  // Force require encryption key
+  if (!encryptionKey) {
+    throw new Error('ENCRYPTION_KEY environment variable is required. Please provide a base64 encoded 32-byte key.');
+  }
+  
+  let key;
+  try {
+    // Decode base64 to get 32 bytes
+    key = Buffer.from(encryptionKey, 'base64');
+  } catch (e) {
+    throw new Error('Invalid ENCRYPTION_KEY format: must be a valid base64 encoded string');
+  }
+  
+  // Validate key length is exactly 32 bytes
   if (key.length !== 32) {
-    throw new Error('Invalid encryption key: must be exactly 32 bytes');
+    throw new Error(`Invalid encryption key length: expected 32 bytes, got ${key.length} bytes. Please provide a base64 encoded 32-byte key.`);
   }
   
   return key;
@@ -95,9 +109,103 @@ function decrypt(encryptedData) {
   }
 }
 
+// Legacy field decryption for migration - handles old dual-encrypted data
+function migrateLegacyField(encryptedData, fieldName) {
+  try {
+    if (!encryptedData || !encryptedData.includes(':')) {
+      // Plain text - already migrated or never encrypted
+      return encryptedData;
+    }
+    
+    const parts = encryptedData.split(':');
+    
+    // Handle legacy CBC format (2 parts: iv:encrypted)
+    if (parts.length === 2) {
+      try {
+        const [ivHex, encrypted] = parts;
+        const iv = Buffer.from(ivHex, 'hex');
+        const key = getKey();
+        
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        console.log(`Migrated legacy CBC encrypted field '${fieldName}' to plain text`);
+        return decrypted;
+      } catch (e) {
+        console.warn(`Failed to migrate legacy CBC field '${fieldName}', treating as plain text:`, e.message);
+        return encryptedData;
+      }
+    }
+    
+    // Handle legacy GCM format (3 parts: iv:authTag:encrypted)
+    if (parts.length === 3) {
+      try {
+        const [ivHex, authTagHex, encrypted] = parts;
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
+        const key = getKey();
+        
+        const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+        decipher.setAAD(Buffer.from('stremio-ftp-addon', 'utf8'));
+        decipher.setAuthTag(authTag);
+        
+        let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        console.log(`Migrated legacy GCM encrypted field '${fieldName}' to plain text`);
+        return decrypted;
+      } catch (e) {
+        console.warn(`Failed to migrate legacy GCM field '${fieldName}', treating as plain text:`, e.message);
+        return encryptedData;
+      }
+    }
+    
+    // Unknown format, treat as plain text
+    return encryptedData;
+  } catch (e) {
+    console.warn(`Migration failed for field '${fieldName}', treating as plain text:`, e.message);
+    return encryptedData;
+  }
+}
+
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
+} else {
+  // Ensure correct permissions on existing directory
+  fs.chmodSync(DATA_DIR, 0o700);
+}
+
+// Atomic write function with proper file permissions
+function atomicWriteFile(filePath, data, encoding = 'utf8') {
+  const tmpPath = filePath + '.tmp';
+  
+  try {
+    // Write to temporary file first
+    fs.writeFileSync(tmpPath, data, encoding);
+    
+    // Set secure file permissions (owner read/write only)
+    fs.chmodSync(tmpPath, 0o600);
+    
+    // Force sync to disk
+    const fd = fs.openSync(tmpPath, 'r+');
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    
+    // Atomic move to final location
+    fs.renameSync(tmpPath, filePath);
+    
+  } catch (error) {
+    // Clean up temp file if it exists
+    if (fs.existsSync(tmpPath)) {
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup temp file:', cleanupError.message);
+      }
+    }
+    throw error;
+  }
 }
 
 class FileStorage {
@@ -127,7 +235,7 @@ class FileStorage {
         throw new Error('Encryption validation failed: decrypted data does not match original');
       }
       
-      console.log('✅ Encryption system validated successfully');
+      console.log('✅ Whole-file AEAD encryption system validated successfully');
     } catch (e) {
       console.error('❌ Encryption system validation failed:', e.message);
       throw new Error(`Critical security error: Encryption system is not working properly. ${e.message}`);
@@ -140,43 +248,41 @@ class FileStorage {
         const data = fs.readFileSync(this.configPath, 'utf8');
         const decryptedData = decrypt(data);
         const parsed = JSON.parse(decryptedData);
-        // Convert array back to Map and decrypt sensitive fields
+        // Convert array back to Map and migrate any legacy encrypted fields to plain text
         const configs = new Map();
         for (const [key, config] of parsed) {
-          // Decrypt sensitive fields
-          const decryptedConfig = {
+          // Migrate legacy encrypted fields to plain text (only during loading for backward compatibility)
+          const migratedConfig = {
             ...config,
-            ftpPass: config.ftpPass ? decrypt(config.ftpPass) : config.ftpPass,
-            ftpUser: config.ftpUser ? decrypt(config.ftpUser) : config.ftpUser,
+            ftpPass: config.ftpPass ? migrateLegacyField(config.ftpPass, 'ftpPass') : config.ftpPass,
+            ftpUser: config.ftpUser ? migrateLegacyField(config.ftpUser, 'ftpUser') : config.ftpUser,
           };
-          configs.set(key, decryptedConfig);
+          configs.set(key, migratedConfig);
         }
         return configs;
       }
     } catch (e) {
       console.error('Failed to load configs:', e.message);
+      throw new Error(`Critical error: Cannot load encrypted configurations. ${e.message}. Application cannot start safely.`);
     }
     return new Map();
   }
 
   saveConfigs() {
     try {
-      // Encrypt sensitive fields before saving
+      // Store sensitive fields as plain text - security is provided by whole-file encryption
       const configsToSave = [];
       for (const [key, config] of this.configs) {
-        const encryptedConfig = {
-          ...config,
-          ftpPass: config.ftpPass ? encrypt(config.ftpPass) : config.ftpPass,
-          ftpUser: config.ftpUser ? encrypt(config.ftpUser) : config.ftpUser,
-        };
-        configsToSave.push([key, encryptedConfig]);
+        // No field-level encryption needed - store config as-is
+        configsToSave.push([key, config]);
       }
       const data = JSON.stringify(configsToSave);
       const encryptedData = encrypt(data);
-      fs.writeFileSync(this.configPath, encryptedData, 'utf8');
+      atomicWriteFile(this.configPath, encryptedData, 'utf8');
+      console.log('✅ Configurations saved and encrypted successfully');
     } catch (e) {
       console.error('Failed to save configs:', e.message);
-      throw new Error(`Critical error: Unable to save encrypted configuration. ${e.message}`);
+      throw new Error(`Critical error: Unable to save encrypted configuration. ${e.message}. Configuration changes have been rejected to prevent data corruption.`);
     }
   }
 
@@ -204,7 +310,7 @@ class FileStorage {
   saveCache() {
     try {
       const data = JSON.stringify([...this.cache]);
-      fs.writeFileSync(this.cachePath, data, 'utf8');
+      atomicWriteFile(this.cachePath, data, 'utf8');
     } catch (e) {
       console.error('Failed to save cache:', e.message);
     }
@@ -293,7 +399,7 @@ class FileStorage {
               migratedConfigs.set(key, config);
             }
             this.configs = migratedConfigs;
-            this.saveConfigs(); // This will encrypt the data
+            this.saveConfigs(); // This will encrypt the data with atomic write
             console.log('Migration completed successfully');
             return true;
           }

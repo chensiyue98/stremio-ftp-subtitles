@@ -10,6 +10,7 @@ services:
     environment:
       - PORT=7777
       - PUBLIC_URL=http://localhost:7777
+      - ENCRYPTION_KEY=CHANGE_ME_TO_YOUR_BASE64_ENCODED_32_BYTE_KEY
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:7777/manifest.json', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"]

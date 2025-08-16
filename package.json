@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node -e \"console.log('No tests defined')\""
+    "test": "node -e \"console.log('No tests defined')\"",
+    "test-encryption": "node test-encryption.js"
   },
   "engines": {
     "node": ">=16.0.0"

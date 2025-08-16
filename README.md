@@ -28,7 +28,11 @@ A Stremio addon that serves subtitles from your FTP server with automatic matchi
    - Start Command: `npm start`
    - Environment: `Node`
    - Plan: `Free`
-4. **Add Disk Storage** (for persistence):
+4. **Set Environment Variables**:
+   - Go to Environment tab
+   - Add `ENCRYPTION_KEY`: Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+   - **Important**: Set this before first deployment to avoid data loss
+5. **Add Disk Storage** (for persistence):
    - Name: `addon-data`
    - Mount Path: `/app/data`
    - Size: 1GB
@@ -57,6 +61,23 @@ Visit `http://localhost:7777/configure` to set up your FTP credentials.
 - `PORT` - Server port (default: 7777)
 - `PUBLIC_URL` - Your public addon URL (auto-detected on Render)
 - `NODE_ENV` - Environment mode
+- `ENCRYPTION_KEY` - **Required**: Base64 encoded 32-byte encryption key for secure data storage
+
+### Setting up Encryption Key
+
+**Important**: You must provide an encryption key for secure storage of FTP credentials.
+
+Generate a new key:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Set the environment variable:
+```bash
+export ENCRYPTION_KEY="your_generated_key_here"
+```
+
+For detailed setup instructions, see [ENCRYPTION_SETUP.md](ENCRYPTION_SETUP.md).
 
 ## Supported Subtitle Formats
 
