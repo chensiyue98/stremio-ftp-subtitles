@@ -89,10 +89,6 @@ async function handleUserFileProxy(key, parsedUrl, req, res) {
   const rt = getRuntime(key) || setRuntime(key, createAddonRuntimeForKey(key)).get?.(key) || getRuntime(key);
   
   const driveId = parsedUrl.query.driveId;
-  const ext = String(parsedUrl.query.ext || '').toLowerCase();
-  const name = String(parsedUrl.query.name || 'subtitle').replace(/[/\\]/g, '');
-
-  if (!driveId) {
     res.statusCode = 400;
     res.end('Missing driveId');
     return;

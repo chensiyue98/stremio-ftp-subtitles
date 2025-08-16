@@ -65,6 +65,15 @@ function createServer() {
         }
 
         // a) file proxy
+        if (u.pathname === `/u/${key}/connect-drive` && req.method === 'GET') {
+          return handleConnectDrive(key, req, res, u.query);
+        }
+
+        if (u.pathname === `/u/${key}/google-callback` && req.method === 'GET') {
+          return handleConnectCallback(key, req, res, u.query);
+        }
+
+        // a) file proxy
         if (u.pathname.startsWith(`/u/${key}/file`)) {
           return handleUserFileProxy(key, u, req, res);
         }
