@@ -2,20 +2,19 @@
 const http = require('http');
 const url = require('url');
 const config = require('./config');
-const { configureForm } = require('./templates/html');
-const { 
-  handleConfigureGet, 
-  handleConfigurePost, 
-  handleUserConfigureGet, 
-  handleUserConfigurePost 
+const {
+  handleConfigureGet,
+  handleConfigurePost,
+  handleUserConfigureGet,
+  handleUserConfigurePost
 } = require('./routes/configure');
-const { handleTestFtp, handleUserTestFtp } = require('./routes/ftp-test');
-const { 
-  handleRootManifest, 
-  handleUserManifest, 
-  handleUserSubtitles, 
-  handleUserFileProxy 
+const {
+  handleRootManifest,
+  handleUserManifest,
+  handleUserSubtitles,
+  handleUserFileProxy
 } = require('./routes/addon');
+const { handleConnectDrive, handleConnectCallback } = require('./routes/gdrive');
 
 /**
  * Create and configure the HTTP server
@@ -41,10 +40,6 @@ function createServer() {
         return handleConfigurePost(req, res);
       }
 
-      // Root-level: test FTP connection (for new configuration page)
-      if (u.pathname === '/test-ftp' && req.method === 'POST') {
-        return handleTestFtp(req, res);
-      }
 
       // ---- User-specific instance routes: /u/<key>/... ----
       const m = u.pathname.match(/^\/u\/([a-f0-9]{16})(\/.*|$)/i);
@@ -60,12 +55,16 @@ function createServer() {
           return handleUserConfigurePost(key, req, res);
         }
 
-        // User-specific: test FTP connection
-        if (u.pathname === `/u/${key}/test-ftp` && req.method === 'POST') {
-          return handleUserTestFtp(key, req, res);
+
+        if (u.pathname === `/u/${key}/connect-drive` && req.method === 'GET') {
+          return handleConnectDrive(key, req, res, u.query);
         }
 
-        // a) FTP file proxy
+        if (u.pathname === `/u/${key}/google-callback` && req.method === 'GET') {
+          return handleConnectCallback(key, req, res, u.query);
+        }
+
+        // a) file proxy
         if (u.pathname.startsWith(`/u/${key}/file`)) {
           return handleUserFileProxy(key, u, req, res);
         }

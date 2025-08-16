@@ -16,7 +16,7 @@ async function getCinemeta(type, id) {
 
   try {
     const r = await fetch(metaUrl, {
-      headers: { 'user-agent': 'ftp-subs-addon' },
+      headers: { 'user-agent': 'gdrive-subs-addon' },
       signal: ctrl.signal,
     });
     if (!r.ok) return null;
