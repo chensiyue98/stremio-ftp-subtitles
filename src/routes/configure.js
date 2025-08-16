@@ -1,7 +1,7 @@
 // routes/configure.js
 const crypto = require('crypto');
 const querystring = require('querystring');
-const { setConfig, setRuntime, hasRuntime, getConfig } = require('../utils/storage');
+const { setConfig, setRuntime, hasRuntime } = require('../utils/storage');
 const { configureForm, configuredOkPage } = require('../templates/html');
 const { createAddonRuntimeForKey } = require('../services/addon');
 
@@ -12,7 +12,7 @@ const { createAddonRuntimeForKey } = require('../services/addon');
  */
 function handleConfigureGet(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.end(configureForm({}, '/configure', ''));
+  res.end(configureForm());
 }
 
 /**
@@ -32,7 +32,6 @@ function handleConfigurePost(req, res) {
       ftpPass: String(data.ftpPass || ''),
       ftpSecure: !!data.ftpSecure,
       ftpBase: String(data.ftpBase || '/subtitles').trim() || '/subtitles',
-      driveFolderId: String(data.driveFolderId || '').trim(),
     };
     setConfig(key, cfg);
     if (!hasRuntime(key)) {
@@ -50,9 +49,10 @@ function handleConfigurePost(req, res) {
  * @param {object} res - Response object
  */
 function handleUserConfigureGet(key, req, res) {
+  const { getConfig } = require('../utils/storage');
   const prefill = getConfig(key) || {};
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.end(configureForm(prefill, `/u/${key}/configure`, key));
+  res.end(configureForm(prefill, `/u/${key}/configure`));
 }
 
 /**
@@ -66,15 +66,12 @@ function handleUserConfigurePost(key, req, res) {
   req.on('data', (chunk) => (body += chunk));
   req.on('end', () => {
     const data = querystring.parse(body);
-    const existing = getConfig(key) || {};
     const cfg = {
       ftpHost: String(data.ftpHost || '').trim(),
       ftpUser: String(data.ftpUser || '').trim(),
       ftpPass: String(data.ftpPass || ''),
       ftpSecure: !!data.ftpSecure,
       ftpBase: String(data.ftpBase || '/subtitles').trim() || '/subtitles',
-      driveFolderId: String(data.driveFolderId || '').trim(),
-      driveTokens: existing.driveTokens,
     };
     setConfig(key, cfg);
     // Rebuild runtime for this key (to apply new config immediately)
