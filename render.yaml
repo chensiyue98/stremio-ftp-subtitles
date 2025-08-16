@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: stremio-ftp-subtitles
+    name: stremio-drive-subtitles
     env: node
     plan: free
     buildCommand: npm install

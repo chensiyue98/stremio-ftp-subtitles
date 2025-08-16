@@ -4,7 +4,7 @@ const querystring = require('querystring');
 const config = require('../config');
 const { getRuntime, setRuntime } = require('../utils/storage');
 const { createAddonRuntimeForKey } = require('../services/addon');
-const { createFtpFileDownloader } = require('../services/ftp');
+const { createDriveFileDownloader } = require('../services/googleDrive');
 
 /**
  * Handle GET /manifest.json (root manifest)
@@ -16,7 +16,7 @@ function handleRootManifest(req, res) {
     id: config.ADDON_ID_PREFIX,
     version: config.ADDON_VERSION,
     name: `${config.ADDON_NAME} (未配置)`,
-    description: '请先打开 /configure 填写你的 FTP 参数并安装专属链接',
+    description: '请先打开 /configure 连接你的 Google Drive 并安装专属链接',
     resources: ['subtitles'],
     types: ['movie', 'series', 'other'],
     catalogs: [],
@@ -88,13 +88,9 @@ async function handleUserSubtitles(key, parsedUrl, req, res) {
 async function handleUserFileProxy(key, parsedUrl, req, res) {
   const rt = getRuntime(key) || setRuntime(key, createAddonRuntimeForKey(key)).get?.(key) || getRuntime(key);
   
-  const filePath = parsedUrl.query.path;
-  const ext = String(parsedUrl.query.ext || '').toLowerCase();
-  const name = String(parsedUrl.query.name || 'subtitle').replace(/[/\\]/g, '');
-
-  if (!filePath || String(filePath).includes('..')) {
+  const driveId = parsedUrl.query.driveId;
     res.statusCode = 400;
-    res.end('Bad path');
+    res.end('Missing driveId');
     return;
   }
 
@@ -118,16 +114,16 @@ async function handleUserFileProxy(key, parsedUrl, req, res) {
     return;
   }
 
-  const downloadFile = createFtpFileDownloader(rt.cfg);
   try {
-    await downloadFile(filePath, res);
+    const downloadDrive = createDriveFileDownloader(rt.cfg);
+    await downloadDrive(driveId, res);
   } catch (e) {
-    console.error('FTP proxy error:', e.message || e);
+    console.error('File proxy error:', e.message || e);
     if (!res.headersSent) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     }
     res.statusCode = 502;
-    res.end('FTP proxy error');
+    res.end('File proxy error');
   }
 }
 

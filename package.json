@@ -1,20 +1,25 @@
 {
-  "name": "stremio-ftp-subtitles",
+  "name": "stremio-drive-subtitles",
   "version": "1.3.3",
   "type": "commonjs",
-  "main": "index.js",
+  "main": "main.js",
   "dependencies": {
-    "basic-ftp": "^5.0.4"
+    "googleapis": "^105.0.0"
   },
   "scripts": {
+<<<<<<< HEAD
+    "start": "node main.js",
+    "dev": "nodemon main.js",
+=======
     "start": "node index.js",
     "dev": "nodemon index.js",
+>>>>>>> 2b359e0 (Add encryption setup and secure storage implementation)
     "test": "node -e \"console.log('No tests defined')\"",
     "test-encryption": "node test-encryption.js"
   },
   "engines": {
     "node": ">=16.0.0"
   },
-  "keywords": ["stremio", "addon", "subtitles", "ftp"],
-  "description": "Stremio addon for serving subtitles from FTP servers"
+  "keywords": ["stremio", "addon", "subtitles", "google-drive"],
+  "description": "Stremio addon for serving subtitles from Google Drive"
 }

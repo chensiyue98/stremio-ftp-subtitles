@@ -1,16 +1,14 @@
-# Stremio FTP Subtitles Addon
+# Stremio Google Drive Subtitles Addon
 
-A Stremio addon that serves subtitles from your FTP server with automatic matching.
+A Stremio addon that serves subtitles from a Google Drive folder with automatic matching.
 
 ## Features
 
-- 🗂️ **FTP Integration**: Connect to any FTP/FTPS server
-- 🎯 **Smart Matching**: Automatic subtitle matching by filename, year, season/episode
-- 🌍 **Multi-language**: Supports multiple subtitle formats (.srt, .vtt, .ass, .ssa, .sub)
-- ⚡ **Fast Caching**: File listing cache for better performance
-- 🔒 **Encrypted Storage**: FTP credentials stored with AES-256-GCM encryption (highest security)
-- 🛡️ **Security**: Per-user configurations with secure persistent storage
-- 🎨 **Easy Setup**: Web-based configuration with connection testing
+- 📁 **Google Drive integration**: connect a folder and authorize access
+- 🎯 **Smart matching**: automatic subtitle matching by filename, year, season/episode
+- 🌍 **Multi-language**: supports `.srt`, `.vtt`, `.ass`, `.ssa`, and `.sub`
+- 🔒 **Encrypted storage**: configuration and tokens stored with AES-256-GCM
+- 🎨 **Easy setup**: web-based configuration with a "Connect to Google Drive" button
 
 ## Quick Deploy to Render
 
@@ -19,20 +17,23 @@ A Stremio addon that serves subtitles from your FTP server with automatic matchi
 ### Manual Deployment
 
 1. **Fork this repository**
-2. **Connect to Render**:
-   - Go to [render.com](https://render.com)
-   - Create new Web Service
-   - Connect your GitHub repository
-3. **Configure**:
+2. **Connect to Render** and create a new Web Service
+3. **Configure**
    - Build Command: `npm install`
    - Start Command: `npm start`
    - Environment: `Node`
    - Plan: `Free`
+<<<<<<< HEAD
+4. **Set Environment Variables**
+   - `ENCRYPTION_KEY`: 32-byte base64 key
+5. **Add Disk Storage**
+=======
 4. **Set Environment Variables**:
    - Go to Environment tab
    - Add `ENCRYPTION_KEY`: Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
    - **Important**: Set this before first deployment to avoid data loss
 5. **Add Disk Storage** (for persistence):
+>>>>>>> 2b359e0 (Add encryption setup and secure storage implementation)
    - Name: `addon-data`
    - Mount Path: `/app/data`
    - Size: 1GB
@@ -40,27 +41,28 @@ A Stremio addon that serves subtitles from your FTP server with automatic matchi
 ## Usage
 
 1. Visit your deployed addon URL (e.g., `https://your-app.onrender.com`)
-2. Configure your FTP server credentials
-3. Test the connection
+2. Enter your Google Drive folder ID and save
+3. Click **Connect to Google Drive** and grant access
 4. Copy the generated manifest URL
-5. Install in Stremio: `stremio://your-manifest-url`
+5. Install in Stremio: `stremio://<manifest-url>`
 
 ## Local Development
 
 ```bash
-git clone https://github.com/chensiyue98/stremio-ftp-subtitles.git
-cd stremio-ftp-subtitles
 npm install
 npm start
 ```
 
-Visit `http://localhost:7777/configure` to set up your FTP credentials.
+Visit `http://localhost:7777/configure` to set up your Google Drive folder.
 
 ## Environment Variables
 
 - `PORT` - Server port (default: 7777)
-- `PUBLIC_URL` - Your public addon URL (auto-detected on Render)
+- `PUBLIC_URL` - Public addon URL
 - `NODE_ENV` - Environment mode
+<<<<<<< HEAD
+- `ENCRYPTION_KEY` - **Required** base64 encoded 32-byte encryption key
+=======
 - `ENCRYPTION_KEY` - **Required**: Base64 encoded 32-byte encryption key for secure data storage
 
 ### Setting up Encryption Key
@@ -78,41 +80,15 @@ export ENCRYPTION_KEY="your_generated_key_here"
 ```
 
 For detailed setup instructions, see [ENCRYPTION_SETUP.md](ENCRYPTION_SETUP.md).
+>>>>>>> 2b359e0 (Add encryption setup and secure storage implementation)
 
 ## Supported Subtitle Formats
 
-- `.srt` - SubRip
-- `.vtt` - WebVTT
-- `.ass` - Advanced SSA
-- `.ssa` - Sub Station Alpha
-- `.sub` - Various subtitle formats
-
-## Language Detection
-
-The addon automatically detects subtitle language from filenames:
-- Chinese: `zh`, `chs`, `sc`, `chi`, `cn`, `chinese`
-- English: `en`, `eng`, `english`
-- Spanish: `es`, `spa`, `spanish`
-- French: `fr`, `fre`, `fra`, `french`
-- German: `de`, `ger`, `deu`, `german`
-- Portuguese: `pt`, `por`, `portuguese`
-- Russian: `ru`, `rus`, `russian`
-
-## Troubleshooting
-
-### Connection Issues
-- Verify FTP credentials and server accessibility
-- Check if your FTP server supports the connection type (FTP vs FTPS)
-- Ensure the base directory path is correct
-
-### No Subtitles Found
-- Check if subtitle files exist in the configured directory
-- Verify file extensions are supported
-- Check FTP server permissions
-
-### Performance Issues
-- Reduce `MAX_DEPTH` for large directory structures
-- Consider organizing subtitles in shallower folder hierarchies
+- `.srt`
+- `.vtt`
+- `.ass`
+- `.ssa`
+- `.sub`
 
 ## License
 
